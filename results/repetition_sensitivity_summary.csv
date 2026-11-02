@@ -1,0 +1,6 @@
+repetition_budget,feasible_trials,successful_trials,success_rate_percent,infeasible_trials,false_positives,false_positive_rate_percent,false_negatives,average_attempts,average_execution_seconds
+1,80,80,100.0,20,0,0.0,0,1.0,0.008222074000514112
+5,80,80,100.0,20,0,0.0,0,1.8,0.03187691300205188
+10,80,80,100.0,20,0,0.0,0,2.8,0.06059094399854075
+20,80,80,100.0,20,0,0.0,0,4.8,0.12095484300079988
+50,80,80,100.0,20,0,0.0,0,10.8,0.28703688000066907
