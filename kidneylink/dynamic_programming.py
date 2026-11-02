@@ -1,9 +1,34 @@
-﻿from functools import lru_cache
+
+from functools import lru_cache
 from typing import Dict, Hashable, Set
 
 import networkx as nx
 
 from kidneylink.colorful_structures import f
+
+
+def _validate_altruistic_donors(
+    graph: nx.DiGraph,
+    altruistic_donors: Set[Hashable],
+) -> None:
+    """Validate altruistic donor vertices."""
+
+    for donor in altruistic_donors:
+
+        if donor not in graph:
+            raise ValueError(
+                f"Unknown altruistic donor: {donor}"
+            )
+
+        if graph.nodes[donor].get("node_type") != "altruistic":
+            raise ValueError(
+                f"Invalid altruistic donor: {donor}"
+            )
+
+        if graph.in_degree(donor) > 0:
+            raise ValueError(
+                f"Altruistic donor {donor} cannot have incoming edges."
+            )
 
 
 def _has_altruistic_path_of_length(
@@ -13,12 +38,19 @@ def _has_altruistic_path_of_length(
 ) -> bool:
     """Check for a simple altruistic path of exactly length edges."""
 
+    pair_vertices = {
+        v for v, data in graph.nodes(data=True)
+        if data.get("node_type") == "pair"
+    }
+
     def search(current, visited, depth):
+
         if depth == length:
             return True
 
         for nxt in graph.successors(current):
-            if nxt in visited or nxt in altruistic_donors:
+
+            if nxt not in pair_vertices or nxt in visited:
                 continue
 
             if search(nxt, visited | {nxt}, depth + 1):
@@ -27,7 +59,8 @@ def _has_altruistic_path_of_length(
         return False
 
     for donor in altruistic_donors:
-        if donor in graph and search(donor, {donor}, 0):
+
+        if search(donor, {donor}, 0):
             return True
 
     return False
@@ -46,7 +79,8 @@ def _has_cycle_in_length_range(
     }
 
     def search(start, current, visited, depth):
-        # Count the closing edge before checking the cycle length.
+
+        # Count the closing edge before checking cycle length.
         if graph.has_edge(current, start):
             cycle_length = depth + 1
 
@@ -57,6 +91,7 @@ def _has_cycle_in_length_range(
             return False
 
         for nxt in graph.successors(current):
+
             if nxt not in pairs or nxt in visited:
                 continue
 
@@ -66,6 +101,7 @@ def _has_cycle_in_length_range(
         return False
 
     for start in pairs:
+
         if search(start, start, {start}, 0):
             return True
 
@@ -82,15 +118,23 @@ def solve_coloring_instance(
 ) -> bool:
     """Solve one fixed-coloring instance."""
 
+    # Validate input parameters.
     if target <= 0:
         raise ValueError("Target must be positive.")
 
     if max_cycle_length < 0 or max_path_length < 0:
         raise ValueError("Length limits cannot be negative.")
 
+    # Validate altruistic donor vertices.
+    _validate_altruistic_donors(
+        graph,
+        altruistic_donors,
+    )
+
     number_of_colors = 3 * target
     full_mask = (1 << number_of_colors) - 1
 
+    # Validate coloring.
     if set(coloring) != set(graph.nodes):
         raise ValueError("Every graph vertex must have a color.")
 
@@ -104,19 +148,25 @@ def solve_coloring_instance(
 
     # Special case 1: long altruistic path.
     if max_path_length >= target:
+
         if _has_altruistic_path_of_length(
-            graph, altruistic_donors, target
+            graph,
+            altruistic_donors,
+            target,
         ):
             return True
 
     # Special case 2: long exchange cycle.
     if max_cycle_length >= target:
+
         if _has_cycle_in_length_range(
-            graph, target, max_cycle_length
+            graph,
+            target,
+            max_cycle_length,
         ):
             return True
 
-    # Apply the reduced limits only after special cases.
+    # Apply reduced limits only after special cases.
     reduced_path_length = min(max_path_length, target - 1)
     reduced_cycle_length = min(max_cycle_length, target - 1)
 
@@ -140,6 +190,8 @@ def solve_coloring_instance(
 
     @lru_cache(maxsize=None)
     def D(color_mask, patients):
+
+        # Base cases.
         if patients == 0:
             return True
 
@@ -148,9 +200,13 @@ def solve_coloring_instance(
 
         submask = color_mask
 
+        # Try every non-empty subset of available colors.
         while submask:
+
             for i in range(1, patients + 1):
+
                 if f_cached(submask, i):
+
                     remaining = color_mask ^ submask
 
                     if D(remaining, patients - i):
@@ -160,7 +216,9 @@ def solve_coloring_instance(
 
         return False
 
+    # A feasible solution covers between target and 2*target patients.
     for patients in range(target, 2 * target + 1):
+
         if D(full_mask, patients):
             return True
 

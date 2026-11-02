@@ -1,4 +1,4 @@
-﻿import networkx as nx
+import networkx as nx
 import pytest
 
 from kidneylink.dynamic_programming import solve_coloring_instance
@@ -144,3 +144,49 @@ def test_long_altruistic_path_special_case():
     assert solve_coloring_instance(
         g, {"A1"}, coloring, 2, 3, 2
     )
+
+def test_unknown_altruistic_donor_rejected():
+    g = nx.DiGraph()
+    g.add_node("P1", node_type="pair")
+
+    with pytest.raises(ValueError, match="Unknown altruistic donor"):
+        solve_coloring_instance(
+            g,
+            {"A1"},
+            {"P1": 0},
+            1,
+            3,
+            3,
+        )
+
+
+def test_invalid_altruistic_donor_type_rejected():
+    g = nx.DiGraph()
+    g.add_node("P1", node_type="pair")
+
+    with pytest.raises(ValueError, match="Invalid altruistic donor"):
+        solve_coloring_instance(
+            g,
+            {"P1"},
+            {"P1": 0},
+            1,
+            3,
+            3,
+        )
+
+
+def test_altruistic_donor_with_incoming_edge_rejected():
+    g = nx.DiGraph()
+    g.add_node("A1", node_type="altruistic")
+    g.add_node("P1", node_type="pair")
+    g.add_edge("P1", "A1")
+
+    with pytest.raises(ValueError, match="incoming"):
+        solve_coloring_instance(
+            g,
+            {"A1"},
+            {"A1": 0, "P1": 1},
+            2,
+            3,
+            3,
+        )

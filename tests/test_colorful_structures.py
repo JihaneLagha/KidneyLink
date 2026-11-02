@@ -1,4 +1,4 @@
-﻿import networkx as nx
+import networkx as nx
 
 from kidneylink.colorful_structures import f
 
@@ -91,3 +91,32 @@ def test_no_altruistic_donor_means_no_path():
 
     assert not f(g, set(), {"P1": 0, "P2": 1},
                  {0, 1}, 1, 3, 2)
+
+def test_altruistic_path_rejects_unknown_intermediate_vertex():
+    g = make_graph(
+        [
+            ("A1", "altruistic"),
+            ("X", "unknown"),
+            ("P1", "pair"),
+        ],
+        [
+            ("A1", "X"),
+            ("X", "P1"),
+        ],
+    )
+
+    coloring = {
+        "A1": 0,
+        "X": 1,
+        "P1": 2,
+    }
+
+    assert not f(
+        g,
+        {"A1"},
+        coloring,
+        {0, 1},
+        1,
+        3,
+        2,
+    )

@@ -1,4 +1,4 @@
-﻿from typing import Dict, Hashable, Set
+from typing import Dict, Hashable, Set
 
 import networkx as nx
 
@@ -10,8 +10,10 @@ def has_colorful_cycle(
     max_cycle_length: int,
 ) -> bool:
     """
-    Determine whether an induced color subgraph contains
-    a colorful directed cycle using exactly required_colors.
+    Determine whether the graph contains a colorful
+    directed cycle using exactly required_colors.
+
+    Every vertex in an exchange cycle must be a patient pair.
     """
 
     k = len(required_colors)
@@ -26,6 +28,7 @@ def has_colorful_cycle(
     ]
 
     allowed = set(pairs)
+    full_mask = sum(1 << c for c in required_colors)
 
     for start in pairs:
         start_color = coloring[start]
@@ -38,6 +41,7 @@ def has_colorful_cycle(
 
             for mask, last in states:
                 for nxt in graph.successors(last):
+
                     if nxt not in allowed:
                         continue
 
@@ -54,9 +58,8 @@ def has_colorful_cycle(
                 break
 
         for mask, last in states:
-            if mask == sum(1 << c for c in required_colors):
-                if graph.has_edge(last, start):
-                    return True
+            if mask == full_mask and graph.has_edge(last, start):
+                return True
 
     return False
 
@@ -70,8 +73,11 @@ def has_colorful_altruistic_path(
     max_path_length: int,
 ) -> bool:
     """
-    Determine whether an induced color subgraph contains
-    an altruistic path covering exactly patient_count patients.
+    Determine whether the graph contains a colorful
+    altruistic path covering exactly patient_count patients.
+
+    The starting altruistic donor is not counted as a patient.
+    Every subsequent vertex must be a patient-donor pair.
     """
 
     if patient_count < 1 or patient_count > max_path_length:
@@ -80,34 +86,49 @@ def has_colorful_altruistic_path(
     if len(required_colors) != patient_count + 1:
         return False
 
-    allowed = {
-        v for v in graph.nodes
-        if coloring[v] in required_colors
+    donors = set(altruistic_donors)
+
+    # Validate donor vertices.
+    for donor in donors:
+        if donor not in graph:
+            raise ValueError(f"Unknown altruistic donor: {donor}")
+
+        if graph.nodes[donor].get("node_type") != "altruistic":
+            raise ValueError(f"Invalid altruistic donor: {donor}")
+
+    # Only patient-donor pairs can follow an altruistic donor.
+    allowed_pairs = {
+        v for v, data in graph.nodes(data=True)
+        if data.get("node_type") == "pair"
+        and coloring[v] in required_colors
     }
 
     full_mask = sum(1 << c for c in required_colors)
 
-    for donor in altruistic_donors:
-        if donor not in allowed:
+    for donor in donors:
+
+        if coloring[donor] not in required_colors:
             continue
 
         initial_mask = 1 << coloring[donor]
+
         states = {(initial_mask, donor)}
 
         for _ in range(patient_count):
+
             next_states = set()
 
             for mask, last in states:
+
                 for nxt in graph.successors(last):
 
-                    if nxt not in allowed:
-                        continue
-
-                    if nxt in altruistic_donors:
+                    # Reject altruistic and unknown vertex types.
+                    if nxt not in allowed_pairs:
                         continue
 
                     bit = 1 << coloring[nxt]
 
+                    # A colorful path cannot repeat a color.
                     if mask & bit:
                         continue
 
@@ -118,7 +139,10 @@ def has_colorful_altruistic_path(
             if not states:
                 break
 
-        if any(mask == full_mask for mask, _ in states):
+        if any(
+            mask == full_mask
+            for mask, _ in states
+        ):
             return True
 
     return False
