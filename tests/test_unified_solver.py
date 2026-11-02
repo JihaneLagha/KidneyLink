@@ -1,4 +1,4 @@
-﻿import networkx as nx
+import networkx as nx
 import pytest
 
 from kidneylink.unified_solver import solve_kidney_exchange
@@ -110,4 +110,22 @@ def test_invalid_donor_type_rejected():
     with pytest.raises(ValueError):
         solve_kidney_exchange(
             graph, {"P1"}, 2, 2, 3
+        )
+
+def test_altruistic_donor_with_incoming_edge_rejected():
+    graph = nx.DiGraph()
+
+    graph.add_node("A1", node_type="altruistic")
+    graph.add_node("P1", node_type="pair")
+
+    graph.add_edge("P1", "A1")
+
+    with pytest.raises(ValueError, match="incoming"):
+        solve_kidney_exchange(
+            graph=graph,
+            altruistic_donors={"A1"},
+            target=1,
+            max_cycle_length=2,
+            max_path_length=2,
+            method="exact",
         )

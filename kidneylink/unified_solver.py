@@ -1,7 +1,6 @@
-﻿from dataclasses import dataclass
-from typing import Hashable, Optional, Set, Literal
-
+from dataclasses import dataclass
 from time import perf_counter
+from typing import Hashable, Literal, Optional, Set
 
 import networkx as nx
 
@@ -39,6 +38,69 @@ class KidneyLinkResult:
     @property
     def successful(self) -> bool:
         return self.decision
+
+
+def _validate_input(
+    graph: nx.DiGraph,
+    altruistic_donors: Set[Hashable],
+    target: int,
+    max_cycle_length: int,
+    max_path_length: int,
+    method: SolverMethod,
+) -> None:
+    """Validate the graph and solver parameters."""
+
+    if not isinstance(graph, nx.DiGraph):
+        raise TypeError("Graph must be a NetworkX DiGraph.")
+
+    if target <= 0:
+        raise ValueError("Target must be positive.")
+
+    if max_cycle_length < 0 or max_path_length < 0:
+        raise ValueError("Length limits cannot be negative.")
+
+    if method not in ("exact", "randomized"):
+        raise ValueError(
+            "Method must be either 'exact' or 'randomized'."
+        )
+
+    if not altruistic_donors.issubset(graph.nodes):
+        raise ValueError("Unknown altruistic donor.")
+
+    # Validate all altruistic donor vertices.
+    for donor in altruistic_donors:
+
+        if graph.nodes[donor].get("node_type") != "altruistic":
+            raise ValueError(
+                f"Invalid altruistic donor vertex: {donor}"
+            )
+
+        # Altruistic donors must only initiate exchange paths.
+        if graph.in_degree(donor) != 0:
+            raise ValueError(
+                f"Altruistic donor {donor} cannot have incoming edges."
+            )
+
+    # Validate graph vertex types.
+    for vertex, data in graph.nodes(data=True):
+
+        if data.get("node_type") not in ("pair", "altruistic"):
+            raise ValueError(
+                f"Invalid or missing node_type for vertex: {vertex}"
+            )
+
+        if (
+            data.get("node_type") == "altruistic"
+            and vertex not in altruistic_donors
+        ):
+            raise ValueError(
+                f"Altruistic vertex {vertex} is missing "
+                "from altruistic_donors."
+            )
+
+    # Self-loops are not valid kidney exchange edges.
+    if nx.number_of_selfloops(graph) > 0:
+        raise ValueError("Self-loops are not allowed.")
 
 
 def solve_kidney_exchange(
@@ -87,26 +149,14 @@ def solve_kidney_exchange(
         Unified decision and algorithm execution information.
     """
 
-    # Validate input parameters.
-    if target <= 0:
-        raise ValueError("Target must be positive.")
-
-    if max_cycle_length < 0 or max_path_length < 0:
-        raise ValueError("Length limits cannot be negative.")
-
-    if method not in ("exact", "randomized"):
-        raise ValueError(
-            "Method must be either 'exact' or 'randomized'."
-        )
-
-    if not altruistic_donors.issubset(graph.nodes):
-        raise ValueError("Unknown altruistic donor.")
-
-    for donor in altruistic_donors:
-        if graph.nodes[donor].get("node_type") != "altruistic":
-            raise ValueError(
-                f"Invalid altruistic donor vertex: {donor}"
-            )
+    _validate_input(
+        graph=graph,
+        altruistic_donors=altruistic_donors,
+        target=target,
+        max_cycle_length=max_cycle_length,
+        max_path_length=max_path_length,
+        method=method,
+    )
 
     # Exact optimization mode.
     if method == "exact":
@@ -148,4 +198,3 @@ def solve_kidney_exchange(
         elapsed_seconds=randomized.elapsed_seconds,
         randomized_result=randomized,
     )
-
