@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from typing import Hashable, List, Set, Tuple
 
 import networkx as nx
@@ -42,9 +42,11 @@ def enumerate_cycles(
     structures = []
 
     for cycle in nx.simple_cycles(graph):
+
         if len(cycle) < 2 or len(cycle) > max_cycle_length:
             continue
 
+        # Every vertex in an exchange cycle must be a patient pair.
         if not all(
             graph.nodes[v].get("node_type") == "pair"
             for v in cycle
@@ -76,6 +78,7 @@ def enumerate_altruistic_paths(
     structures = []
 
     def search(current, path, visited, depth):
+
         if depth > 0:
             structures.append(
                 ExchangeStructure("path", tuple(path))
@@ -85,6 +88,7 @@ def enumerate_altruistic_paths(
             return
 
         for nxt in graph.successors(current):
+
             if nxt in visited:
                 continue
 
@@ -102,9 +106,6 @@ def enumerate_altruistic_paths(
             )
 
     for donor in altruistic_donors:
-        if donor not in graph:
-            continue
-
         search(donor, [donor], {donor}, 0)
 
     return structures
@@ -127,11 +128,30 @@ def solve_exact(
     if max_cycle_length < 0 or max_path_length < 0:
         raise ValueError("Length limits cannot be negative.")
 
+    # Validate that all specified altruistic donors exist.
     if not altruistic_donors.issubset(graph.nodes):
         raise ValueError("Unknown altruistic donor.")
 
-    cycles = enumerate_cycles(graph, max_cycle_length)
+    # Validate altruistic donor types and graph constraints.
+    for donor in altruistic_donors:
 
+        if graph.nodes[donor].get("node_type") != "altruistic":
+            raise ValueError(
+                f"Invalid altruistic donor: {donor}"
+            )
+
+        if graph.in_degree(donor) != 0:
+            raise ValueError(
+                f"Altruistic donor {donor} cannot have incoming edges."
+            )
+
+    # Enumerate all feasible exchange cycles.
+    cycles = enumerate_cycles(
+        graph,
+        max_cycle_length,
+    )
+
+    # Enumerate all feasible altruistic paths.
     paths = enumerate_altruistic_paths(
         graph,
         altruistic_donors,
@@ -162,7 +182,8 @@ def solve_exact(
 
         # No solution can cover more than all remaining pairs.
         remaining_pairs = sum(
-            1 for v, data in graph.nodes(data=True)
+            1
+            for v, data in graph.nodes(data=True)
             if data.get("node_type") == "pair"
             and v not in used_vertices
         )
